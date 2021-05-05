@@ -24,6 +24,9 @@ class InventorySystemGUI:
         self.home_frame.pack()
         self.active_frame = self.home_frame
 
+        vcmd_validate_float = (root.register(is_num), '%P')
+        vcmd_validate_int = (root.register(lambda new_value: is_num(new_value, type_int=True)), '%P')
+
         header_frame = Frame(self.home_frame, bg=HEADER_COLOUR)
         header_frame.grid(row=0, column=0, sticky=E + W)
 
@@ -34,46 +37,37 @@ class InventorySystemGUI:
         sell_item_btn = Button(header_frame, text="Sell Item",
                                command=lambda: self.activate_frame(self.sell_item_frame))
         sell_item_btn.grid(row=0, column=2, sticky=E + W, padx=10)
-        restock_item_btn = Button(header_frame, text="Restock Item")
+        restock_item_btn = Button(header_frame, text="Restock Item",
+                                  command=lambda: self.activate_frame(self.restock_item_frame))
         restock_item_btn.grid(row=0, column=3, sticky=E + W)
 
-        test_btn = Button(header_frame, text="Scrollbar Pos", command=self.get_scrollbar_pos)
-        test_btn.grid(row=0, column=4, sticky=E + W)
+        restock_item_btn = Button(header_frame, text="Restock Item",
+                                  command=lambda: self.activate_frame(self.restock_item_frame))
+        restock_item_btn.grid(row=0, column=3, sticky=E + W)
 
-        subheader_frame = Frame(self.home_frame)
-        subheader_frame.grid(row=1, column=0, sticky=E + W)
-        subheader_frame.grid_columnconfigure(0, weight=6)
-        subheader_frame.grid_columnconfigure(1, weight=1)
-        subheader_frame.grid_columnconfigure(2, weight=1)
+        # TESTING TREE FUNCTIONALITY
+        self.tree_frame = Frame(self.home_frame)
+        self.tree_frame.grid(row=2, column=0, sticky="ew")
+        self.item_tree = ttk.Treeview(self.tree_frame, selectmode='browse')
+        self.item_tree.pack(side='left', fill='x', expand='1')
 
-        # testing stretching labels and then anchoring text left to enable whole widget to be clickable
-        name_header_label = Label(subheader_frame, text="Name", anchor='w')
-        name_header_label.bind("<Button>", self.mouse_click)
-        name_header_label.grid(row=0, column=0, sticky="nesw")
-        price_header_label = Label(subheader_frame, text="Price", anchor='w')
-        price_header_label.grid(row=0, column=1, sticky="nesw", ipadx=20)
-        quantity_header_label = Label(subheader_frame, text="Quantity", anchor='w')
-        quantity_header_label.grid(row=0, column=2, sticky="nesw")
-        tkinter.ttk.Separator(subheader_frame, orient=HORIZONTAL).grid(column=0, row=1, columnspan=5, sticky='ew')
+        vsb = ttk.Scrollbar(self.tree_frame, orient="vertical", command=self.item_tree.yview)
+        vsb.pack(side='right', fill='y')
 
-        self.canvas_container = Frame(self.home_frame)
-        self.scrollable_canvas = Canvas(self.canvas_container)
-        self.scrollable_canvas.pack(side=LEFT, fill="both", expand="yes")
-        self.scrollbar = ttk.Scrollbar(self.canvas_container, orient="vertical", command=self.scrollable_canvas.yview)
-        self.scrollbar.pack(side=RIGHT, fill="y")
+        self.item_tree.configure(yscrollcommand=vsb.set)
 
-        self.scrollable_canvas.configure(yscrollcommand=self.scrollbar.set)
-        self.scrollable_canvas.bind('<Configure>', lambda e: self.scrollable_canvas.configure(
-            scrollregion=self.scrollable_canvas.bbox('all')))
-        self.scrollable_canvas.bind_all("<MouseWheel>", self._on_mousewheel)
+        self.item_tree["columns"] = ("1", "2", "3")
+        self.item_tree['show'] = 'headings'
+        self.item_tree.column("1", width=200, anchor='w')
+        self.item_tree.column("2", width=20, anchor='e', stretch=TRUE)
+        self.item_tree.column("3", width=20, anchor='e')
+        self.item_tree.heading("1", text="Name", anchor='w')
+        self.item_tree.heading("2", text="Price", anchor='e')
+        self.item_tree.heading("3", text="Quantity", anchor='e')
 
-        self.items_frame = Frame(self.scrollable_canvas)
-        self.scrollable_canvas.create_window((0, 0), window=self.items_frame, anchor="s")
-
-        # shits the bed for some reason when isn't in row 2
-        self.canvas_container.grid(row=2, column=0, ipadx=20, ipady=20)
-
-        self.default_items = [Product("Gorgeous T-Shirt", "", 55, 3), Product("Amazing Shorts", "", 39, 19),
+        # where the 2d gridded items will be stored
+        self.items_list_grid = []
+        self.default_items = [Product("Gorgeous T-Shirts", "", 55, 3), Product("Amazing Shorts", "", 39, 19),
                               Product("Cute Crop Top", "", 40, 3), Product("Snazzy Jacket", "", 169, 2),
                               Product("Gorgeous T-Shirt", "", 55, 3), Product("Amazing Shorts", "", 39, 19),
                               Product("Cute Crop Top", "", 40, 3), Product("Snazzy Jacket", "", 169, 2),
@@ -88,10 +82,10 @@ class InventorySystemGUI:
         # which row to highlight by default
         self.active_row = 0
 
-        # doesn't work
-        self.scrollable_canvas.yview_moveto(0.0)
-
-        self.update_items()
+        # add all items to tree
+        for i in range(len(self.default_items)):
+            self.item_tree.insert("", 'end', values=(
+                self.default_items[i].name, self.default_items[i].price, self.default_items[i].quantity))
 
         # ADD ITEMS FRAME
         self.add_item_frame = Frame(parent)
@@ -102,9 +96,6 @@ class InventorySystemGUI:
         self.name_var = StringVar()
         self.price_var = StringVar()
         self.quantity_var = StringVar()
-
-        # setting up input validation for numerical-only (float) entry widgets
-        vcmd_add_item = (root.register(is_num), '%P')
 
         enter_name_label = Label(self.add_item_frame, text="Name of Product")
         enter_name_label.grid(row=2, column=0)
@@ -118,12 +109,12 @@ class InventorySystemGUI:
         enter_price_label = Label(self.add_item_frame, text="Sale Price")
         enter_price_label.grid(row=6, column=0)
         price_entry = Entry(self.add_item_frame, textvariable=self.price_var, validate="all",
-                            validatecommand=vcmd_add_item)
+                            validatecommand=vcmd_validate_float)
         price_entry.grid(row=7, column=0)
         enter_quantity_label = Label(self.add_item_frame, text="Quantity")
         enter_quantity_label.grid(row=8, column=0)
         quantity_entry = Entry(self.add_item_frame, textvariable=self.quantity_var, validate="all",
-                               validatecommand=vcmd_add_item)
+                               validatecommand=vcmd_validate_int)
         quantity_entry.grid(row=9, column=0)
 
         button_frame = Frame(self.add_item_frame)
@@ -152,12 +143,9 @@ class InventorySystemGUI:
         sell_prompt_label.grid(row=4, column=0, sticky=E + W, ipady=10, pady=5)
         self.sell_quantity = StringVar()
 
-        # setting up input validation for numerical-only (int) entry widget
-        vcmd_sell_item = (root.register(lambda new_value: is_num(new_value, type_int=True)), '%P')
-
         sell_quantity_entry = Entry(self.sell_item_frame, textvariable=self.sell_quantity, validate="all",
-                                    validatecommand=vcmd_sell_item)
-        sell_quantity_entry.grid(row=5, column=0, sticky=E + W)
+                                    validatecommand=vcmd_validate_int)
+        sell_quantity_entry.grid(row=5, column=0, sticky=E + W, ipadx=200)
 
         sell_button_frame = Frame(self.sell_item_frame)
         sell_button_frame.grid(row=6, column=0)
@@ -166,16 +154,36 @@ class InventorySystemGUI:
         sell_confirm_btn = Button(sell_button_frame, text="Confirm", command=self.sell_item)
         sell_confirm_btn.grid(row=0, column=1, padx=10)
 
-    def get_scrollbar_pos(self):
-        print(self.scrollable_canvas.yview())
-        self.scrollable_canvas.yview_moveto(0.0)
+        # Almost identical to sell item frame, fix?
+        self.restock_item_frame = Frame(parent)
+        restock_item_title = Label(self.restock_item_frame, text="Restock Product", bg=HEADER_COLOUR)
+        restock_item_title.grid(row=0, column=0, sticky=E + W, ipady=8)
+        tkinter.ttk.Separator(self.restock_item_frame, orient=HORIZONTAL).grid(row=1, column=0, columnspan=2,
+                                                                               sticky='ew')
+        self.restock_item_subtitle = Label(self.restock_item_frame,
+                                           text="Restocking: " + self.default_items[self.active_row].name)
+        self.restock_item_subtitle.grid(row=2, column=0, sticky=E + W, ipady=4)
+        self.restock_item_quantity = Label(self.restock_item_frame,
+                                           text="Quantity Remaining: " + str(
+                                               self.default_items[self.active_row].quantity))
+        self.restock_item_quantity.grid(row=3, column=0, sticky=E + W, ipady=4)
 
-    def _on_mousewheel(self, event):
-        self.scrollable_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        restock_prompt_label = Label(self.restock_item_frame, text="How many items would you like to restock?",
+                                     anchor=S)
+        restock_prompt_label.grid(row=4, column=0, sticky=E + W, ipady=10, pady=5)
+        self.restock_quantity = StringVar()
 
-    def mouse_click(self, row):
-        self.active_row = row
-        self.update_items()
+        restock_quantity_entry = Entry(self.restock_item_frame, textvariable=self.restock_quantity, validate="all",
+                                       validatecommand=vcmd_validate_int)
+        restock_quantity_entry.grid(row=5, column=0, sticky=E + W, ipadx=200)
+
+        restock_button_frame = Frame(self.restock_item_frame)
+        restock_button_frame.grid(row=6, column=0)
+        restock_cancel_btn = Button(restock_button_frame, text="Back",
+                                    command=lambda: self.activate_frame(self.home_frame))
+        restock_cancel_btn.grid(row=0, column=0, padx=10, pady=10, ipadx=10)
+        restock_confirm_btn = Button(restock_button_frame, text="Confirm", command=self.restock_item)
+        restock_confirm_btn.grid(row=0, column=1, padx=10)
 
     def activate_frame(self, frame):
         self.active_frame.pack_forget()
@@ -184,7 +192,13 @@ class InventorySystemGUI:
 
         self.clear_all_inputs()
 
+        # Placeholder
         if frame == self.sell_item_frame:
+            for item in self.item_tree.selection():
+                item_text = self.item_tree.item(item, "values")
+                self.item_tree.item(item, values="foo")
+                print(item_text)
+
             self.sell_item_subtitle.configure(text="Selling: " + self.default_items[self.active_row].name)
             self.sell_item_quantity.configure(
                 text="Quantity Remaining: " + str(self.default_items[self.active_row].quantity))
@@ -198,40 +212,7 @@ class InventorySystemGUI:
         self.sell_quantity.set("")
 
     def update_items(self):
-        # update the scroll region to account for possible changes in the item window height
-        self.scrollable_canvas.bind('<Configure>', lambda e: self.scrollable_canvas.configure(
-            scrollregion=self.scrollable_canvas.bbox('all')))
-
-        # destroy and recreate the item frame to wipe all objects in it, prevents multiple overlapping grids
-        # from occuring,
-        # NOT a permanent solution
-        self.items_frame.destroy()
-        self.items_frame = Frame(self.scrollable_canvas)
-        self.scrollable_canvas.create_window((0, 0), window=self.items_frame, anchor="s")
-
-        # BAD solution, ideally only update what has changed, saves computing power for larger lists
-        for i in range(len(self.default_items)):
-            if i == self.active_row:
-                colour = "light blue"
-            else:
-                colour = "#F0F0F0"
-            name_temp_label = Label(self.items_frame, text=self.default_items[i].name, bg=colour, anchor=W)
-            name_temp_label.bind("<Button>", lambda event, row=i: self.mouse_click(row))
-            name_temp_label.grid(row=2 * i + 2, column=0, sticky="nsew")
-            price_temp_label = Label(self.items_frame, text="$" + str(self.default_items[i].price), bg=colour, anchor=W)
-            price_temp_label.bind("<Button>", lambda event, row=i: self.mouse_click(row))
-            price_temp_label.grid(row=2 * i + 2, column=1, sticky="nsew", ipadx=20)
-            quantity_temp_label = Label(self.items_frame, text=self.default_items[i].quantity, bg=colour, anchor=W)
-            quantity_temp_label.bind("<Button>", lambda event, row=i: self.mouse_click(row))
-            quantity_temp_label.grid(row=2 * i + 2, column=2, sticky="nsew")
-            tkinter.ttk.Separator(self.items_frame, orient=HORIZONTAL).grid(column=0, row=2 * i + 3, columnspan=3,
-                                                                            sticky='ew')
-
-        # has no effect for some reason
-        self.items_frame.grid_columnconfigure(0, weight=6)
-        self.items_frame.grid_columnconfigure(1, weight=1)
-        self.items_frame.grid_columnconfigure(2, weight=1)
-
+        pass
 
     def add_item(self):
         # displays error if any of the mandatory fields are empty
@@ -240,10 +221,11 @@ class InventorySystemGUI:
                                          "Please ensure that all mandatory fields are completed")
         else:
             self.default_items.append(
-                Product(self.name_var.get(), self.description_entry.get("1.0", "end-1c"), self.price_var.get(),
-                        self.quantity_var.get()))
+                Product(self.name_var.get(), self.description_entry.get("1.0", "end-1c"), float(self.price_var.get()),
+                        int(self.quantity_var.get())))
+            self.item_tree.insert("", 'end', values=(
+                self.default_items[-1].name, self.default_items[-1].price, self.default_items[-1].quantity))
             self.activate_frame(self.home_frame)
-            self.update_items()
 
     def sell_item(self):
         if int(self.sell_quantity.get()) > self.default_items[self.active_row].quantity:
@@ -258,6 +240,14 @@ class InventorySystemGUI:
                                                                                         self.active_row].name))
             self.activate_frame(self.home_frame)
 
+    def restock_item(self):
+        self.default_items[self.active_row].quantity += int(self.restock_quantity.get())
+        self.update_items()
+        tkinter.messagebox.showinfo("Success",
+                                    "Successfully restocked {} units of '{}'".format(self.restock_quantity.get(),
+                                                                                     self.default_items[
+                                                                                         self.active_row].name))
+        self.activate_frame(self.home_frame)
 
 
 class Product:
