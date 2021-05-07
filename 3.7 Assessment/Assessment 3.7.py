@@ -62,7 +62,7 @@ class InventorySystemGUI:
         self.sidebar_frame.grid(row=0, column=0, rowspan=3, sticky="nsew")
 
         self.focus_btn = Button(self.sidebar_frame, text="Focus",
-                                command=lambda: self.item_tree.see(self.selected_item_iid))
+                                command=lambda: self.update_selected_item())
         self.focus_btn.grid(row=0, column=0, sticky=N + E + W, padx=10, pady=10)
 
         add_item_btn = Button(self.sidebar_frame, text="Add New Item",
